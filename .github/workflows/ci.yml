@@ -1,0 +1,88 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "module12" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: testdb
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    # Set job-level environment variables so the app connects to the started Postgres service
+    env:
+      DATABASE_URL: postgresql://postgres:password@127.0.0.1:5432/testdb
+      # Provide a SECRET_KEY for JWTs during CI; set this secret in repo settings.
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+
+    - name: Install Playwright browsers
+      # Playwright Python needs browser binaries installed separately.
+      # This step downloads browsers (and required system packages when --with-deps)
+      run: |
+        python -m playwright install --with-deps
+
+    - name: Wait for Postgres
+      run: |
+        echo "Waiting for Postgres to accept connections..."
+        timeout=30
+        while ! bash -c "cat < /dev/tcp/127.0.0.1/5432" >/dev/null 2>&1; do
+          sleep 1
+          timeout=$((timeout-1))
+          if [ $timeout -le 0 ]; then
+            echo "Postgres did not become available within timeout"
+            exit 1
+          fi
+        done
+        echo "Postgres is listening on 127.0.0.1:5432"
+
+    - name: Run tests
+      run: |
+        pytest --maxfail=1 --disable-warnings
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Log into Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Build Docker image
+      run: |
+        docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/is601_app:latest .
+
+    - name: Push Docker image
+      run: |
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/is601_app:latest

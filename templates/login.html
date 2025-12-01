@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Login</title>
+</head>
+<body>
+  <h1>Login</h1>
+  <form id="loginForm">
+    <label for="email">Email:</label>
+    <input type="email" id="email" name="email" required />
+    <br />
+    <label for="password">Password:</label>
+    <input type="password" id="password" name="password" required />
+    <br />
+    <button type="submit">Login</button>
+  </form>
+
+  <div id="message"></div>
+  <script>
+    // helper that returns headers including Authorization: Bearer <token> when available
+    function getAuthHeaders() {
+      const token = localStorage.getItem('access_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = 'Bearer ' + token;
+      }
+      return headers;
+    }
+
+    const form = document.getElementById('loginForm');
+    const msg = document.getElementById('message');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.textContent = '';
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch('/users/login', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          msg.textContent = data.detail || JSON.stringify(data);
+          return;
+        }
+        if (data.access_token) {
+          localStorage.setItem('access_token', data.access_token);
+        }
+        msg.textContent = 'Login successful!';
+      } catch (err) {
+        msg.textContent = String(err);
+      }
+    });
+  </script>
+</body>
+</html>

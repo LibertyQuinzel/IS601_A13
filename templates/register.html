@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Register</title>
+</head>
+<body>
+  <h1>Register</h1>
+  <form id="registerForm" novalidate>
+    <label for="email">Email:</label>
+    <input type="email" id="email" name="email" required />
+    <br />
+    <label for="password">Password:</label>
+    <input type="password" id="password" name="password" required minlength="8" />
+    <br />
+    <label for="confirm">Confirm Password:</label>
+    <input type="password" id="confirm" name="confirm" required minlength="8" />
+    <br />
+    <button type="submit">Register</button>
+  </form>
+
+  <div id="message"></div>
+  <script>
+    // helper that returns headers including Authorization: Bearer <token> when available
+    function getAuthHeaders() {
+      const token = localStorage.getItem('access_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = 'Bearer ' + token;
+      }
+      return headers;
+    }
+
+    const form = document.getElementById('registerForm');
+    const msg = document.getElementById('message');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.textContent = '';
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const confirm = document.getElementById('confirm').value;
+
+      // simple client-side checks
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        msg.textContent = 'Invalid email format';
+        return;
+      }
+      if (password.length < 8) {
+        msg.textContent = 'Password must be at least 8 characters';
+        return;
+      }
+      if (password !== confirm) {
+        msg.textContent = 'Passwords do not match';
+        return;
+      }
+
+      try {
+        const res = await fetch('/users/register', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          msg.textContent = data.detail || JSON.stringify(data);
+          return;
+        }
+        // store JWT in localStorage
+        if (data.access_token) {
+          localStorage.setItem('access_token', data.access_token);
+        }
+        msg.textContent = 'Registration successful!';
+      } catch (err) {
+        msg.textContent = String(err);
+      }
+    });
+  </script>
+</body>
+</html>
